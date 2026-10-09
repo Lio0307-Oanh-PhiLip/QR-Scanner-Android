@@ -1,0 +1,54 @@
+name: Build QR Scanner APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'QR-Scanner-Android-Source.zip'
+      - '.github/workflows/build-android-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify source archive
+        run: |
+          test -f QR-Scanner-Android-Source.zip || {
+            echo "Missing QR-Scanner-Android-Source.zip in repository root."
+            exit 1
+          }
+
+      - name: Extract source
+        run: unzip -q QR-Scanner-Android-Source.zip
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build debug APK
+        working-directory: qr-scanner-crossplatform/android
+        run: gradle --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: QR-Scanner-Android-APK
+          path: qr-scanner-crossplatform/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
