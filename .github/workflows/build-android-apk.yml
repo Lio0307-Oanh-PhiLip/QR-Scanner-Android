@@ -27,14 +27,44 @@ jobs:
       - name: Extract source
         run: unzip -q QR-Scanner-Android-Source.zip
 
+      - name: Align Java and Kotlin JVM targets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("qr-scanner-crossplatform/android/app/build.gradle")
+          if not p.exists():
+              raise SystemExit(f"Gradle file not found: {p}")
+          s = p.read_text()
+          if "sourceCompatibility JavaVersion.VERSION_17" not in s:
+              marker = "android {"
+              if marker not in s:
+                  raise SystemExit("Could not find android { block in app/build.gradle")
+              block = """android {
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }"""
+              s = s.replace(marker, block, 1)
+          elif "jvmTarget = '17'" not in s:
+              marker = "android {"
+              block = """android {
+              kotlinOptions {
+                  jvmTarget = '17'
+              }"""
+              s = s.replace(marker, block, 1)
+          p.write_text(s)
+          print("Configured Java and Kotlin to target JVM 17")
+          PY
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # GitHub-hosted Ubuntu runners already include the Android SDK.
-      # Avoid the obsolete sdkmanager "tools" package.
       - name: Install Android SDK packages
         run: |
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
