@@ -27,36 +27,46 @@ jobs:
       - name: Extract source
         run: unzip -q QR-Scanner-Android-Source.zip
 
-      - name: Align Java and Kotlin JVM targets
+      - name: Fix Android source compatibility
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("qr-scanner-crossplatform/android/app/build.gradle")
-          if not p.exists():
-              raise SystemExit(f"Gradle file not found: {p}")
-          s = p.read_text()
+          gradle = Path("qr-scanner-crossplatform/android/app/build.gradle")
+          if not gradle.exists():
+              raise SystemExit(f"Gradle file not found: {gradle}")
+          s = gradle.read_text()
           if "sourceCompatibility JavaVersion.VERSION_17" not in s:
-              marker = "android {"
-              if marker not in s:
-                  raise SystemExit("Could not find android { block in app/build.gradle")
-              block = """android {
+              s = s.replace("android {", """android {
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
               kotlinOptions {
                   jvmTarget = '17'
-              }"""
-              s = s.replace(marker, block, 1)
+              }""", 1)
           elif "jvmTarget = '17'" not in s:
-              marker = "android {"
-              block = """android {
+              s = s.replace("android {", """android {
               kotlinOptions {
                   jvmTarget = '17'
-              }"""
-              s = s.replace(marker, block, 1)
-          p.write_text(s)
-          print("Configured Java and Kotlin to target JVM 17")
+              }""", 1)
+          gradle.write_text(s)
+
+          # ML Kit's Barcode type lives in this package. Add its import if
+          # MainActivity references Barcode without importing it.
+          src = Path("qr-scanner-crossplatform/android/app/src/main/java/com/example/qrscanner/MainActivity.kt")
+          if not src.exists():
+              matches = list(Path("qr-scanner-crossplatform/android/app/src/main").rglob("MainActivity.kt"))
+              if not matches:
+                  raise SystemExit("MainActivity.kt not found")
+              src = matches[0]
+          code = src.read_text()
+          imp = "import com.google.mlkit.vision.barcode.common.Barcode"
+          if "Barcode" in code and imp not in code:
+              lines = code.splitlines()
+              last_import = max((i for i, line in enumerate(lines) if line.startswith("import ")), default=0)
+              lines.insert(last_import + 1, imp)
+              src.write_text("\n".join(lines) + "\n")
+          print("Configured JVM 17 and ensured ML Kit Barcode import")
           PY
 
       - name: Set up Java
